@@ -1,5 +1,11 @@
 #define MAX_PLAYERS     1000
 
+
+//	Wird der Wert von DEBUG_MODE_ON auf true gesetzt, werden bestimmte Debuggen-Funktionalit?ten im Code ausgef?hrt.
+//	Dies beinhaltet z.B. Ausgaben auf der Serverkonsole, die sehr umfangreich sein k?nnen.
+//	Wenn der Server ohne Probleme l?uft, sollte der Wert 'false' bleiben.
+new bool:DEBUG_MODE_ON	= false;
+
 #include <open.mp>
 #include <samp_bcrypt>
 #include <a_mysql>  
@@ -22,14 +28,31 @@ enum
 
     DIALOG_REGISTER,
 
-    DIALOG_LOGIN
+    DIALOG_LOGIN,
+
+	DIALOG_PROFILE_SELECT
 };
 
+// TEAMS_IDs
+enum
+{
+	TEAM_POLICE
+}
+
+
+
 // Gamemode-Relevante Libraries
-#include <s_login>
+//#include <s_login>
+
+#include <s_account>
+#include <s_profile>
+
 #include <s_rentalcars>
 #include <s_hospitals>
+#include <s_police>
 
+// geladene Spielerprofile
+new profiles[MAX_PLAYERS][E_USER_PROFILE];
 
 main()
 {
@@ -56,12 +79,14 @@ public OnGameModeInit()
 
     // Verbindung zur Datenbak erfolgreich.
     print("MYSQL CONNECTION succeeded");
-	
 	// Spawnen der Mietwagen (s_rentalcars)
 	GetRentalCarsSpawnPoints();
 	
 	// Krankenh?user laden (s_hospitals)
 	GetHospitalsFromDatabase();
+	
+	// Polizei laden (s_hospitals)
+	GetPoliceCarsSpawnPoints();
 	
 	return 1;
 }
@@ -88,15 +113,15 @@ public OnPlayerConnect(playerid)
     TogglePlayerSpectating(playerid, true);
 
     // Player name
-    GetPlayerName(playerid, PlayerData[playerid][pName]);
+    GetPlayerName(playerid, userProfiles[playerid][pName]);
 
     // Let's send a query to receive all the stored player data from the 'players' table.
     new szQuery[256];
-    mysql_format(g_sql, szQuery, sizeof (szQuery), "SELECT * FROM `players` WHERE `account_name` = '%e' LIMIT 1", PlayerData[playerid][pName]);
-    mysql_tquery(g_sql, szQuery, "OnPlayerAccountCheck", "i", playerid);
+    mysql_format(g_sql, szQuery, sizeof (szQuery), "SELECT * FROM `u_accounts` WHERE `acc_name` = '%e' LIMIT 1", userAccounts[playerid][aName]);
+    mysql_tquery(g_sql, szQuery, "GetUserAccounts", "i", playerid);
 
     // Set login status to false.
-    PlayerData[playerid][pLoggedIn] = false;
+    userAccounts[playerid][aLoggedIn] = false;
 	
 	return 1;
 }
@@ -107,14 +132,14 @@ public OnPlayerDisconnect(playerid, reason)
     // Now, we're gonna get the player's pos and angle before we save the player data.
     if(reason == 1)
     {
-        GetPlayerPos(playerid, PlayerData[playerid][player_pos_x], PlayerData[playerid][player_pos_y], PlayerData[playerid][player_pos_z]);
-        GetPlayerFacingAngle(playerid, PlayerData[playerid][player_pos_angle]);
+        GetPlayerPos(playerid, userProfiles[playerid][pSpawn_x], userProfiles[playerid][pSpawn_y], userProfiles[playerid][pSpawn_z]);
+        GetPlayerFacingAngle(playerid, userProfiles[playerid][pSpawn_angle]);
     }
 
-    PlayerData[playerid][pBadLogins] = 0;
+    userAccounts[playerid][aBadLogins] = 0;
 
     // Save the player data.
-    SavePlayerData(playerid);
+    UpdateUserProfile(playerid);
 
     return 1;
 }
@@ -132,13 +157,10 @@ public OnPlayerRequestClass(playerid, classid)
 
 public OnPlayerSpawn(playerid)
 {
-    // Set the player position to the last saved one
-    SetPlayerPos(playerid, PlayerData[playerid][player_pos_x], PlayerData[playerid][player_pos_y], PlayerData[playerid][player_pos_z]);
-    SetPlayerFacingAngle(playerid, PlayerData[playerid][player_pos_angle]);
 
-    // Player skin
-    SetPlayerSkin(playerid, PlayerData[playerid][pSkin]);
+	
 
+	
     return 1;
 }
 
@@ -177,26 +199,6 @@ public OnVehicleDeath(vehicleid, killerid)
         |_|
 */
 
-public OnFilterScriptInit()
-{
-	printf(" ");
-	printf("  -----------------------------------------");
-	printf("  |  Error: Script was loaded incorrectly |");
-	printf("  -----------------------------------------");
-	printf(" ");
-	return 1;
-}
-
-public OnFilterScriptExit()
-{
-	return 1;
-}
-
-public OnPlayerRequestSpawn(playerid)
-{
-	return 1;
-}
-
 public OnPlayerCommandText(playerid, cmdtext[])
 {
 	if(!strcmp(cmdtext, "/pos", true))
@@ -218,8 +220,16 @@ public OnPlayerCommandText(playerid, cmdtext[])
 	{
 		SetPlayerHealth(playerid,0);
 	}
+	else if(!strcmp(cmdtext, "/spawnLSPD",true))
+	{
+		new Float:posX, Float:posY, Float:posZ;
+		GetPlayerPos(playerid, posX,posY,posZ);
+		CreateVehicle(596, posX+1.0, posY+1.0, posZ, 0, 0, 26, 600);
+	}
 	else
+	{
 		SendClientMessage(playerid, 0xFFAAAAAA, "Unbekannter Befehl!");
+	}
 	return 0;
 }
 
@@ -304,8 +314,13 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             if(!response) return Kick(playerid);
 
             // We're gonna check and see if the password is correct.
-            bcrypt_verify(playerid, "OnPlayerVerifyPassword", inputtext, PlayerData[playerid][PasswordHash]);
+            bcrypt_verify(playerid, "OnAccountVerifyPassword", inputtext, userAccounts[playerid][PasswordHash]);
         }
+
+		case DIALOG_PROFILE_SELECT:
+		{
+			
+		}
     }
 
     return 1;
