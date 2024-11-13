@@ -15,27 +15,26 @@ enum E_HOSPITAL_DATA
 }
 new hospitals[8][E_HOSPITAL_DATA];
 
-
-
-
-
+// Informationen aus der Datenbank holen
 forward GetHospitalsFromDatabase();
 public GetHospitalsFromDatabase()
 {
 	//print("Lade Krankenh?user");
 	new szQuery[256];
-	mysql_format(g_sql, szQuery, sizeof (szQuery), "SELECT * FROM `hospitals`");
+	mysql_format(g_sql, szQuery, sizeof (szQuery), "SELECT * FROM `s_hospitals`");
     mysql_tquery(g_sql, szQuery, "CreateHospitals", "");
 }
 
+// Krankenh?user erstellen
 forward CreateHospitals(result[], rows, fields);
 public CreateHospitals(result[], rows, fields)
 {
 	new hospitalCount;
 	cache_get_row_count(hospitalCount);	
-	new output[128];
-	format(output, sizeof(output),"Erstelle Krankenh?user... (%i Orte gefunden)", hospitalCount);
-	print(output);
+	
+	printf("\n\n");
+	printf("Erstelle Krankenh?user... (%i Orte gefunden)", hospitalCount);
+	printf("--------------------------------------------------------------------------------");
 	
 	for (new i = 0; i < hospitalCount; i++)
 	{
@@ -51,11 +50,15 @@ public CreateHospitals(result[], rows, fields)
 		cache_get_value_name_float(i, "camPosZ", hospitals[i][camPosZ]);
 		
 		//Debug
-		// format(output, sizeof(output), "Krankenhaus an %.2f, %.2f erstellt...", hospitals[i][spawnPosX], hospitals[i][spawnPosY]);
-		// print(output);
+		if(DEBUG_MODE_ON){printf(" Erstelle Krankenhaus an\tx: %.2f\ty: %.2f\t", hospitals[i][spawnPosX], hospitals[i][spawnPosX]);}
+
 	}
+	//Debug
+	if(DEBUG_MODE_ON){printf("(%i Krankenh?user erstellt)", hospitalCount);}
+	
 }
 
+// Funktion um Spieler ins n?chstgelegene Krankenhaus versetzen
 forward SetPlayerHospital(playerid);
 public SetPlayerHospital(playerid)
 {	
@@ -74,8 +77,18 @@ public SetPlayerHospital(playerid)
 		}
 	}
 	i = dist2[1];
-	SetTimerEx("PreparePlayerForSpawn",54000,false,"iiffff",playerid,1,hospitals[i][spawnPosX],hospitals[i][spawnPosY],hospitals[i][spawnPosZ],hospitals[i][spawnAngle]);
-	GameTextForPlayer(playerid,"~r~Du bist im Krankenhaus~n~~w~Deine Behandlung dauert ~r~60 ~w~Sekunden",60000,3);
+	SetTimerEx("DischargePlayerFromHospital",54000,false,"iffff",playerid,hospitals[i][spawnPosX],hospitals[i][spawnPosY],hospitals[i][spawnPosZ],hospitals[i][spawnAngle]);
+	GameTextForPlayer(playerid,"~r~Du bist im Krankenhaus~n~~w~Deine Behandlung dauert ~r~60 ~w~Sekunden",54000,3);
 	InterpolateCameraPos(playerid,hospitals[i][spawnPosX],hospitals[i][spawnPosY],hospitals[i][spawnPosZ],hospitals[i][camPosX],hospitals[i][camPosY],hospitals[i][camPosZ], 2000, CAMERA_MOVE);
 	InterpolateCameraLookAt(playerid, hospitals[i][spawnPosX],hospitals[i][spawnPosY],hospitals[i][spawnPosZ],hospitals[i][camPosX],hospitals[i][camPosY],hospitals[i][camPosZ], 500, CAMERA_MOVE);
+}
+
+// Funktion um den Spieler aus dem Krankenhaus zu entlassen
+forward DischargePlayerFromHospital(playerid,Float:posX,Float:posY,Float:posZ,Float:angle);
+public DischargePlayerFromHospital(playerid,Float:posX,Float:posY,Float:posZ,Float:angle)
+{
+		//Spawn auf das Krankenhaus setzen, Spectator-Modus beenden und Spieler spawnen
+		SetSpawnInfo(playerid, NO_TEAM, userProfiles[playerid][pSkin], posX, posY, posZ, angle, WEAPON:WEAPON_FIST,0);
+		TogglePlayerSpectating(playerid,false);
+		SpawnPlayer(playerid);
 }
